@@ -89,7 +89,8 @@ def register(request, data, is_web):
     )
 
     _account.set_password(data['password'])
-    _account.last_active = timezone.now()
+    _account.last_active = datetime.datetime.now()
+    _account.is_admin = True
     _account.save()
 
     login(request, _account, backend='django.contrib.auth.backends.ModelBackend')

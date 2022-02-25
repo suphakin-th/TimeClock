@@ -45,7 +45,7 @@ def login_web(request, data, code, is_web, group='ACCOUNT_LOGIN'):
     # account.language = data['language']
     login(request, account)
 
-    account.last_login = timezone.now()
+    account.last_login = datetime.datetime.now()
     account.save(update_fields=["last_login", "datetime_update"])
 
 

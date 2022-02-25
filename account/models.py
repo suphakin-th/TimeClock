@@ -12,6 +12,7 @@ from django.db.models import Sum
 from django.utils.translation import ugettext_lazy as _
 from django.utils import timezone
 from account.caches import cache_account_delete
+from utils.datetime import convert_to_local
 from utils.rounder import hour_rounder
 
 
@@ -94,7 +95,7 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
     @property
     def currentWeek(self):
-        date = timezone.now().replace(tzinfo=None)
+        date = datetime.datetime.now()
         start_week = date - datetime.timedelta(date.weekday())
         end_week = start_week + datetime.timedelta(7)
 
@@ -109,8 +110,8 @@ class Account(AbstractBaseUser, PermissionsMixin):
     def currentMonth(self):
         clocking = Clocking.objects.filter(
             account_id=self.id,
-            datetime_create__year=timezone.now().year,
-            datetime_create__month=timezone.now().month
+            datetime_create__year=datetime.datetime.now().year,
+            datetime_create__month=datetime.datetime.now().month
         ).aggregate(Sum('count_time'))
         return round(clocking['count_time__sum'] if clocking and 'count_time__sum' in clocking else 0)
 
@@ -125,7 +126,7 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
 class Clocking(models.Model):
     account = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='+', on_delete=models.CASCADE)
-    count_time = models.IntegerField(default=-1)
+    count_time = models.IntegerField(default=0)
     clock_in = models.DateTimeField(blank=True, null=True)
     clock_out = models.DateTimeField(blank=True, null=True)
 
@@ -137,12 +138,15 @@ class Clocking(models.Model):
 
     @staticmethod
     def checking_today(account_id):
+        print('q: %s - %s - %s' % (datetime.datetime.now().year, datetime.datetime.now().month, datetime.datetime.now().day))
+        print(Clocking.objects.values())
         clocking = Clocking.objects.filter(
             account_id=account_id,
-            datetime_create__year=timezone.now().year,
-            datetime_create__month=timezone.now().month,
-            datetime_create__day=timezone.now().day
+            datetime_create__year=datetime.datetime.now().year,
+            datetime_create__month=datetime.datetime.now().month,
+            datetime_create__day=datetime.datetime.now().day
         ).order_by('-datetime_create').first()
+
         return clocking if clocking else None
 
     @staticmethod
@@ -152,22 +156,22 @@ class Clocking(models.Model):
         if not clocking:
             return Clocking.objects.create(
                 account_id=account_id,
-                clock_in=timezone.now()
+                clock_in=datetime.datetime.now()
             )
-        elif clocking and clocking.clock_in and clocking.clock_in.date() - timezone.now().date() >= datetime.timedelta(days=1):
+        elif clocking and clocking.clock_in and (timezone.now().day - clocking.clock_in.day) >= 1:
             clocking.count_time += (24 - int(hour_rounder(clocking.clock_in).hour))
-            clocking.clock_out = timezone(
-                day=clocking.clock_in.day + 1,
-                month=clocking.clock_in.month,
-                year=clocking.clock_in.year
+            clocking.clock_out = datetime.datetime(
+                day=datetime.datetime.now().day + 1,
+                month=datetime.datetime.now().month,
+                year=datetime.datetime.now().year
             )
             clocking.save()
             return Clocking.objects.create(
                 account_id=account_id,
-                clock_in=timezone.now()
+                clock_in=datetime.datetime.now()
             )
         elif clocking and not clocking.clock_in:
-            clocking.clock_in = timezone.now()
+            clocking.clock_in = datetime.datetime.now()
             clocking.count_time = 0
             clocking.save()
             return clocking
@@ -175,9 +179,8 @@ class Clocking(models.Model):
         elif clocking and clocking.clock_in and clocking.clock_out:
             return Clocking.objects.create(
                 account_id=account_id,
-                clock_in=timezone.now()
+                clock_in=datetime.datetime.now()
             )
-
         else:
             return None
 
@@ -186,9 +189,27 @@ class Clocking(models.Model):
         clocking = Clocking.checking_today(account_id)
         if not clocking:
             return None
-        else:
-            clocking.count_time = (timezone.now().hour - hour_rounder(clocking.clock_in).hour)
-            clocking.clock_out = timezone.now()
+        elif clocking and clocking.clock_in and (timezone.now().day - clocking.clock_in.day) >= 1:
+            clocking.count_time += (24 - int(hour_rounder(clocking.clock_in).hour))
+            clocking.clock_out = datetime.datetime(
+                day=datetime.datetime.now().day + 1,
+                month=datetime.datetime.now().month,
+                year=datetime.datetime.now().year
+            )
+            clocking.save()
+            return Clocking.objects.create(
+                account_id=account_id,
+                clock_in=datetime.datetime(
+                    day=datetime.datetime.now().day,
+                    month=datetime.datetime.now().month,
+                    year=datetime.datetime.now().year
+                ),
+                clock_out=datetime.datetime.now(),
+                count_time=hour_rounder(datetime.datetime.now())
+            )
+        elif clocking and clocking.clock_in and not clocking.clock_out:
+            clocking.count_time += round(abs(clocking.clock_in - timezone.now()).total_seconds() / 3600.0)
+            clocking.clock_out = datetime.datetime.now()
             clocking.save()
             return clocking
 
