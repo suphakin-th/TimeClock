@@ -1,0 +1,23 @@
+version: '3.9'
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/src
+    depends_on:
+      - mariadb
+
+  mariadb:
+    image: mariadb:10.6.5-focal
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+    volumes:
+      - /Users/suphakinthiwong/mnt/mariadb/var/lib/mysql:/var/lib/mysql
+      - /Users/suphakinthiwong/mnt/mariadb/etc/mysql/mariadb.conf.d/:/etc/mysql/mariadb.conf.d/
+    ports:
+      - "3306:3306"
